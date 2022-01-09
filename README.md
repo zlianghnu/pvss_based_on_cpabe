@@ -7,7 +7,7 @@ This is the proof of concept implementation.
 
 ### python3 main.py 2
 
-2 means t=n/2
+The parameter 2 means threashold t=n/2, where n is number of shareholders.
 
 ## setup 
 

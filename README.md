@@ -1,6 +1,13 @@
 # pvss_based_on_cpabe 
 
+This is the proof of concept implementation. 
+
 ## entrance: main.py
+
+
+### python3 main.py 2
+
+2 means t=n/2
 
 ## setup 
 

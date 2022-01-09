@@ -14,7 +14,7 @@ ct_t = { 'C0':GT, 'C1':G1, 'C2':G1, 'C3':G2 }
 
 ret={}
 keyV=1
-assertExe=False
+assertExe=True
 debug = False
 class CPabe_BSW07(ABEnc):
     def __init__(self, groupObj):
@@ -64,34 +64,41 @@ class CPabe_BSW07(ABEnc):
         r = group.random() 
         g_r = (mpk['g2'] ** r)
         
+        #original CP-ABE KeyGen algorithm outputs: K=(D0, {D1, D2}) 
+        #ED0 <- D0
         ED0 = mpk['g2']**(r+msk['alpha']) #(msk['g2_alpha'] * g_r) ** (1 / msk['beta'])        
-        ED1, ED2 = {}, {}
-        ED3={}
+        #hard relation: (K, (ED0,{ED1,ED2,ED3}))
+        ED1, ED2, ED3 = {}, {},{}        
         attr2r_j={}
         attr2l={}
         for j in S:
             r_j = group.random()
             attr2r_j[j]=r_j
+            #ED1 <- D1
             ED1[j] = g_r * (group.hash(j, G2) ** r_j)
             # print(elgamalKeys[j]['pk'])
             l=group.random()
             attr2l[j]=l
+            #encrypt D2 to ED2, ED3
             ED2[j]=mpk['g'] ** r_j* (elgamalKeys[j]['pk']**l)
             ED3[j]=mpk['g']**l
 
-        ED1p, ED2p = {}, {}
-        ED3p={}
+        #sigma commitment value (ElGamal ciphertext): ({ED1p, ED2p,ED3p})
+        ED1p, ED2p,ED3p = {}, {},{}
+        
         attr2r_jp={}
         attr2lp={}
         for j in S:
             r_jp = group.random()
-            attr2r_jp[j]=r_jp
+            attr2r_jp[j]=r_jp            
             ED1p[j] = g_r * (group.hash(j, G2) ** r_jp)
             # print(elgamalKeys[j]['pk'])
             lp=group.random()
             attr2lp[j]=lp
             ED2p[j]=mpk['g'] ** r_jp* (elgamalKeys[j]['pk']**lp)
             ED3p[j]=mpk['g']**lp
+
+        # sigma protocol challenge: c
         c=group.hash((ED0,ED1p,ED1p,ED2p,ED2p,ED3p,ED3p), ZR)
         
         attr2r_jtidle={}
@@ -104,6 +111,7 @@ class CPabe_BSW07(ABEnc):
             w=group.random(ZR)
             a1=pair(mpk['g'],mpk['g2'])**w
             a2=pair(elgamalKeys[j]['pk'],ha)**w
+            # DLEQ challenge value: c2
             c2=group.hash((a1,a2), ZR) 
             z=w-attr2l[j]*c2
             attr2AlphaR[j]={
@@ -114,6 +122,8 @@ class CPabe_BSW07(ABEnc):
             }
         ret[keyV]["dis"]+=time.time()-ts
         ts=time.time()    
+
+        # Verify whether the sigma protocol is correct or not
         if assertExe:
             for j in S:
                 ha=group.hash(j, G2)
@@ -142,7 +152,7 @@ class CPabe_BSW07(ABEnc):
         # print("secret0",s)
         sp = group.random(ZR)
         sharesp = util.calculateSharesDict(sp, policy)
-
+        #hard relation: (M, (C0,{C1,C2,C3}))
         C0=(mpk['e_gg_alpha'] ** s) * M
         C1 = mpk['g'] ** s
         C2, C3 = {}, {}
@@ -150,7 +160,7 @@ class CPabe_BSW07(ABEnc):
             j = util.strip_index(i)
             C2[i] = mpk['g'] ** shares[i]
             C3[i] = group.hash(j, G2) ** shares[i] 
-        
+        #sigma protocol commitment (CP-ABE ciphertext): (C0p,{C1p,C2p,C3p})
         Mp=group.random(GT)
         C0p=(mpk['e_gg_alpha'] ** sp) * Mp
         C1p = mpk['g'] ** sp
@@ -159,7 +169,7 @@ class CPabe_BSW07(ABEnc):
             j = util.strip_index(i)
             C2p[i] = mpk['g'] ** sharesp[i]
             C3p[i] = group.hash(j, G2) ** sharesp[i] 
-        
+        #sigma protocol challenge: c
         c=group.hash((C0,C0p,C1,C1p,C2,C2p,C3,C3p), ZR)
         stidle=sp-c*s
         # stidle=sp-c*s
@@ -173,6 +183,8 @@ class CPabe_BSW07(ABEnc):
             # sharestidletest.append(shares[i])
         ret[keyV]["dis"]+=time.time()-ts              
         ts=time.time()
+
+        # Verify whether the sigma protocol is correct or not
         if assertExe:
             assert(C0p==Mtilde* mpk['e_gg_alpha']**stidle * C0**c)
             assert(C1p==mpk['g']**stidle * C1**c)
@@ -195,8 +207,8 @@ class CPabe_BSW07(ABEnc):
     def tInNrandom(self, t, n) :
         arr = [];
         while True:
-            if len(arr) < t:#原数组长度为0，每次成功添加一个元素后长度加1，则当数组添加最后一个数字之前长度为9即可
-                num = int(mathrandom.random() * n);#生成一个0-100的随机整数
+            if len(arr) < t:
+                num = int(mathrandom.random() * n)
                 if num not in arr:
                     arr.append(num)
             else:
@@ -223,8 +235,9 @@ class CPabe_BSW07(ABEnc):
 
 def main(nodeNum, t):   
     groupObj = PairingGroup('MNT159')
-#  params = {'SS512':a, 'SS1024':a1, 'MNT159':d159, 'MNT201':d201, 'MNT224':d224, 'BN254':f254 }
+    #  params = {'SS512':a, 'SS1024':a1, 'MNT159':d159, 'MNT201':d201, 'MNT224':d224, 'BN254':f254 }
     # nodeNum=n
+
     cpabe = CPabe_BSW07(groupObj)
     # attrs = ['ONE', 'TWO', 'THREE', 'FOUR']
     attrs = ["ATTR%d" % j for j in range(0, nodeNum)]
@@ -232,7 +245,7 @@ def main(nodeNum, t):
     access_policy = '(%d of (%s))'%(t,", ".join(attrs))
 
     # if debug: print("Attributes =>", attrs); print("Policy =>", access_policy)
-    print("setup :=>", "("+str(nodeNum)+","+str(len(newjson.dumps(groupObj.random(G1)))* nodeNum /1024.)+")")
+    print("setup size:=>", "("+str(nodeNum)+","+str('%.2f' % (len(newjson.dumps(groupObj.random(G1)))* nodeNum /1024.))+"kB)")
     (mpk, msk) = cpabe.setup()
     elgamalKeys={}
     for attr in attrs:
@@ -247,7 +260,7 @@ def main(nodeNum, t):
     rand_msg = groupObj.random(GT)
     # if debug: print("msg =>", rand_msg)
     ct = cpabe.encryptAndVerify(mpk, rand_msg, access_policy)
-    print("distribution :=>", "("+str(nodeNum)+","+str((len(newjson.dumps(Enckey))+len(newjson.dumps(ct))-len(ct['policy'])) *2./1024)+")")
+    print("distribution size:=>", "("+str(nodeNum)+","+str('%.2f' % ((len(newjson.dumps(Enckey))+len(newjson.dumps(ct))-len(ct['policy'])) *2./1024))+"kB)")
     # if debug: print("\n\nCiphertext...\n")
     # groupObj.debug(ct)
     # ret[nodeNum]["dis"]+=time.time()-ts
@@ -264,7 +277,7 @@ def main(nodeNum, t):
         # key["D1"][attr]= Enckey["ED1"][attr]
         key["D2"][attr]= Enckey["ED2"][attr]/(Enckey["ED3"][attr]**elgamalKeys[attr]['sk'])
     
-    print("reconstruction :=>", "("+str(nodeNum)+","+str(len(newjson.dumps(key["D2"])) *t/nodeNum/1024.)+")")
+    print("reconstruction size:=>", "("+str(nodeNum)+","+str('%.2f' % (len(newjson.dumps(key["D2"])) *t/nodeNum/1024.))+"kB)")
 
     rec_msg = cpabe.decrypt(mpk, key, ct)
     # if debug: print("\n\nDecrypt...\n")
@@ -277,27 +290,30 @@ if __name__ == "__main__":
     debug = True
     # assertExe===0? False :True
     asser=lambda x: x if x=="True" else False 
-    assertExe=asser(sys.argv[1])    
+    # assertExe=asser(sys.argv[1])    
     runtimes=1
-    for n in range(10, 100, 10):        
-        print(n)
+    Nmax=20
+    for n in range(10, Nmax, 10):        
+        print("n=",n)
         ret[n]={"dis":0,"ver":0,"rec":0}
         ts=time.time()           
         keyV=n
         for i in range(0, runtimes):
-            main(n,int(n/int(sys.argv[2])))
+            main(n,int(n/int(sys.argv[1])))
         # print("("+str(n)+", "+ str('%.2f' % (ret[n]["dis"]*1./runtimes))+") ")
     # print(ret)
     dis=""
     ver=""
     rec=""
-    for n in range(10, 100, 10):        
-        dis+="("+str(n)+", "+ str('%.2f' % (ret[n]["dis"]*1./runtimes))+") "
-        ver+="("+str(n)+", "+ str('%.2f' % (ret[n]["ver"]*1./runtimes))+") "
-        rec+="("+str(n)+", "+ str('%.2f' % (ret[n]["rec"]*1./runtimes))+") "
-    print(dis)
-    print(ver)
-    print(rec)
+    # print the time cost for each phase
+    for n in range(10, Nmax, 10):        
+        dis+="("+str(n)+", "+ str('%.2fs' % (ret[n]["dis"]*1./runtimes))+") "
+        ver+="("+str(n)+", "+ str('%.2fs' % (ret[n]["ver"]*1./runtimes))+") "
+        rec+="("+str(n)+", "+ str('%.2fs' % (ret[n]["rec"]*1./runtimes))+") "
+    print("")
+    print("distribution time cost:",dis)
+    print("verification time cost:",ver)
+    print("reconstruction time cost:",rec)
     
 # increasing t
     # runtimes=4
